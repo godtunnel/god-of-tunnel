@@ -1,137 +1,96 @@
 #!/bin/bash
-# Godtunnel Installer (based on VortexL2)
-# Only branding changes: name, Telegram, GitHub
+#
+# God of Tunnel Installer
+# TCP/IP L2TPv3 Tunnel Manager for Ubuntu/Debian
 
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
-RED='\033[0;31m'
 NC='\033[0m'
 
-clear
-echo -e "${YELLOW}"
-cat << 'EOF'
-  ____       _      _______             _       
- / ___|  ___| |_   |__   __|__ _  ___ | |_ ___ 
- \___ \ / _ \ __|     | |/ _ \ |/ _ \| __/ __|
-  ___) |  __/ |_      | |  __/ | (_) | |_\__ \
- |____/ \___|\__|     |_|\___|_|\___/ \__|___/
-EOF
-echo -e "${GREEN}Godtunnel Installer${NC}"
-echo -e "${CYAN}TCP/IP Tunnel Manager${NC}\n"
+INSTALL_DIR="/opt/god-of-tunnel"
+BIN_PATH="/usr/local/bin/godtunnel"
+SYSTEMD_DIR="/etc/systemd/system"
+CONFIG_DIR="/etc/god-of-tunnel"
 
-# ===============================
-# Check root
-# ===============================
-if [[ $EUID -ne 0 ]]; then
-    echo -e "${RED}Please run as root!${NC}"
+REPO_URL="https://github.com/godtunnel/god-of-tunnel.git"
+REPO_BRANCH="main"
+
+echo -e "${CYAN}"
+cat << 'EOF'
+   ____           __        _______           _       
+  / ___|  ___ ___ \ \      / /_   _|__   ___ | |_ ___ 
+  \___ \ / __/ _ \ \ \ /\ / /  | |/ _ \ / _ \| __/ __|
+   ___) | (_|  __/  \ V  V /   | | (_) | (_) | |_\__ \
+  |____/ \___\___|   \_/\_/    |_|\___/ \___/ \__|___/
+EOF
+
+echo -e "${GREEN}God of Tunnel Installer${NC}"
+echo -e "${CYAN}TCP/IP L2TPv3 Tunnel Manager for Ubuntu/Debian${NC}"
+echo ""
+
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}Error: Please run as root (use sudo)${NC}"
     exit 1
 fi
 
-# ===============================
-# Dependencies
-# ===============================
-echo -e "${YELLOW}[1/5] Installing dependencies...${NC}"
+if ! command -v apt-get &> /dev/null; then
+    echo -e "${RED}Error: This installer requires apt-get (Debian/Ubuntu)${NC}"
+    exit 1
+fi
+
+echo -e "${YELLOW}[1/6] Installing system dependencies...${NC}"
 apt-get update -qq
-apt-get install -y socat iproute2 systemd curl >/dev/null
+apt-get install -y -qq python3 python3-pip python3-venv git socat iproute2
 
-INSTALL_DIR="/opt/godtunnel"
-CONFIG_DIR="/etc/godtunnel"
-BIN_PATH="/usr/local/bin/godtunnel"
+echo -e "${YELLOW}[2/6] Installing kernel modules...${NC}"
+KERNEL_VERSION=$(uname -r)
+apt-get install -y -qq "linux-modules-extra-$KERNEL_VERSION" 2>/dev/null || true
 
-mkdir -p "$INSTALL_DIR" "$CONFIG_DIR/tunnels"
+echo -e "${YELLOW}[3/6] Loading L2TP kernel modules...${NC}"
+modprobe l2tp_core 2>/dev/null || true
+modprobe l2tp_netlink 2>/dev/null || true
+modprobe l2tp_eth 2>/dev/null || true
 
-# ===============================
-# Interactive Panel (same as VortexL2)
-# ===============================
-echo -e "${CYAN}Select server role:${NC}"
-echo "1️⃣  IRAN Server"
-echo "2️⃣  OUTSIDE Server"
-read -p "Enter choice [1/2]: " ROLE
-ROLE=${ROLE:-1}
-if [[ "$ROLE" == "1" ]]; then SERVER_ROLE="IRAN"; else SERVER_ROLE="OUTSIDE"; fi
-
-read -p "Enter LOCAL IP (default 10.10.10.1): " LOCAL_IP
-LOCAL_IP=${LOCAL_IP:-10.10.10.1}
-
-read -p "Enter REMOTE PUBLIC IP: " REMOTE_IP
-
-read -p "Enter TCP ports to tunnel (comma-separated, default 80,443,8080): " PORTS
-PORTS=${PORTS:-80,443,8080}
-
-echo -e "\n🚀 ${GREEN}${SERVER_ROLE} CONFIGURATION${NC}"
-echo "Local IP: $LOCAL_IP"
-echo "Remote IP: $REMOTE_IP"
-echo "Ports: $PORTS"
-echo ""
-
-# ===============================
-# Create systemd services for each port (same as VortexL2)
-# ===============================
-for PORT in $(echo $PORTS | tr ',' ' '); do
-SERVICE_NAME="godtunnel-$PORT.service"
-cat >"$CONFIG_DIR/$SERVICE_NAME" <<EOF
-[Unit]
-Description=Godtunnel Plain TCP Tunnel Port $PORT
-After=network.target
-
-[Service]
-ExecStart=/usr/bin/socat TCP4-LISTEN:$PORT,fork TCP4:$REMOTE_IP:$PORT
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
+cat >/etc/modules-load.d/god-of-tunnel.conf <<EOF
+l2tp_core
+l2tp_netlink
+l2tp_eth
 EOF
 
-cp "$CONFIG_DIR/$SERVICE_NAME" /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable "$SERVICE_NAME"
-systemctl start "$SERVICE_NAME"
+echo -e "${YELLOW}[4/6] Installing God of Tunnel...${NC}"
+rm -rf "$INSTALL_DIR"
+git clone --depth 1 --branch "$REPO_BRANCH" "$REPO_URL" "$INSTALL_DIR"
 
-# Dummy listener if port in use
-ss -tuln | grep -q ":$PORT" || {
-  DUMMY_SERVICE="dummy-$PORT.service"
-  cat >"$CONFIG_DIR/$DUMMY_SERVICE" <<EOF2
-[Unit]
-Description=Dummy Listener $PORT
-After=network.target
-[Service]
-ExecStart=/usr/bin/socat TCP4-LISTEN:$PORT,fork TCP4:127.0.0.1:$PORT
-Restart=always
-[Install]
-WantedBy=multi-user.target
-EOF2
-  cp "$CONFIG_DIR/$DUMMY_SERVICE" /etc/systemd/system/
-  systemctl daemon-reload
-  systemctl enable "$DUMMY_SERVICE"
-  systemctl start "$DUMMY_SERVICE"
-  echo -e "${YELLOW}⚠️ Port $PORT already in use, dummy listener created${NC}"
-}
+echo -e "${YELLOW}[5/6] Installing Python dependencies...${NC}"
+apt-get install -y -qq python3-rich python3-yaml 2>/dev/null || pip3 install rich pyyaml
 
-echo -e "${GREEN}✅ Port $PORT tunnel created${NC}"
-done
-
-# ===============================
-# Create executable panel
-# ===============================
-cat >"$BIN_PATH" <<'EOF'
+cat >"$BIN_PATH" <<EOF
 #!/bin/bash
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-GREEN='\033[0;32m'
-NC='\033[0m'
-echo -e "${YELLOW}Godtunnel Panel${NC}"
-echo -e "${CYAN}Telegram: @Tw0NoGhTe${NC}"
-echo -e "${CYAN}GitHub: github.com/godtunnel${NC}"
-echo ""
-systemctl list-units --type=service | grep godtunnel-
+exec python3 $INSTALL_DIR/vortexl2/main.py "\$@"
 EOF
+
 chmod +x "$BIN_PATH"
 
-# ===============================
-# Finished
-# ===============================
-echo -e "\n${GREEN}======================================${NC}"
-echo -e "${GREEN} Godtunnel Installation Complete! ${NC}"
-echo -e "${GREEN}======================================${NC}"
-echo -e "${CYAN}Run 'sudo godtunnel' to view panel and tunnels${NC}\n"
+echo -e "${YELLOW}[6/6] Installing systemd services...${NC}"
+cp "$INSTALL_DIR/systemd/vortexl2-tunnel.service" "$SYSTEMD_DIR/" 2>/dev/null || true
+
+mkdir -p "$CONFIG_DIR/tunnels"
+chmod 700 "$CONFIG_DIR"
+
+systemctl daemon-reload
+systemctl enable vortexl2-tunnel.service 2>/dev/null || true
+
+echo -e "${GREEN}============================================${NC}"
+echo -e "${GREEN} God of Tunnel Installation Complete!${NC}"
+echo -e "${GREEN}============================================${NC}"
+echo -e "${CYAN}GitHub:${NC} github.com/godtunnel"
+echo -e "${CYAN}Telegram:${NC} @Tw0NoGhTe"
+echo ""
+echo -e "${CYAN}Next steps:${NC}"
+echo -e " 1. Run: ${GREEN}sudo godtunnel${NC}"
+echo -e " 2. Create Tunnel (select IRAN or OUTSIDE)"
+echo -e " 3. Configure IPs"
+echo -e " 4. Add port forwards"
+echo ""
