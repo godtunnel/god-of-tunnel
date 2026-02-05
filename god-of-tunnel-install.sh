@@ -1,5 +1,6 @@
 #!/bin/bash
-# Godtunnel Installer - Based on VortexL2
+# Godtunnel Installer v1.0
+# TCP/IP Tunnel Manager with Interactive Panel
 
 YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
@@ -24,7 +25,7 @@ cat << 'EOF'
   |____/ \___|\__|     |_|\___|_|\___/ \__|___/
 EOF
 echo -e "${GREEN}Godtunnel Installer${NC}"
-echo -e "${CYAN}TCP/IP Tunnel Manager (Like VortexL2)${NC}\n"
+echo -e "${CYAN}TCP/IP Tunnel Manager${NC}\n"
 
 # ===============================
 # Check root
@@ -46,7 +47,10 @@ mkdir -p "$INSTALL_DIR" "$CONFIG_DIR/tunnels"
 # ===============================
 # Interactive Panel
 # ===============================
-read -p "Select server role (1=IRAN, 2=OUTSIDE) [1/2]: " ROLE
+echo -e "${CYAN}Select server role:${NC}"
+echo "1️⃣  IRAN Server"
+echo "2️⃣  OUTSIDE Server"
+read -p "Enter choice [1/2]: " ROLE
 ROLE=${ROLE:-1}
 if [[ "$ROLE" == "1" ]]; then SERVER_ROLE="IRAN"; else SERVER_ROLE="OUTSIDE"; fi
 
@@ -87,17 +91,41 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl start "$SERVICE_NAME"
 
+# Dummy listener check
+ss -tuln | grep -q ":$PORT" || {
+  DUMMY_SERVICE="dummy-$PORT.service"
+  cat >"$CONFIG_DIR/$DUMMY_SERVICE" <<EOF2
+[Unit]
+Description=Dummy Listener $PORT
+After=network.target
+[Service]
+ExecStart=/usr/bin/socat TCP4-LISTEN:$PORT,fork TCP4:127.0.0.1:$PORT
+Restart=always
+[Install]
+WantedBy=multi-user.target
+EOF2
+  cp "$CONFIG_DIR/$DUMMY_SERVICE" /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable "$DUMMY_SERVICE"
+  systemctl start "$DUMMY_SERVICE"
+  echo -e "${YELLOW}⚠️ Port $PORT already in use, dummy listener created${NC}"
+}
+
 echo -e "${GREEN}✅ Port $PORT tunnel created${NC}"
 done
 
 # ===============================
-# Create executable
+# Create executable panel
 # ===============================
 cat >"$BIN_PATH" <<'EOF'
 #!/bin/bash
-echo -e "\033[1;33mGodtunnel Panel (Like VortexL2)\033[0m"
-echo -e "\033[0;36mTelegram: @Tw0NoGhTe\033[0m"
-echo -e "\033[0;36mGitHub: github.com/godtunnel\033[0m"
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+echo -e "${YELLOW}Godtunnel Panel${NC}"
+echo -e "${CYAN}Telegram: @Tw0NoGhTe${NC}"
+echo -e "${CYAN}GitHub: github.com/godtunnel${NC}"
 echo ""
 systemctl list-units --type=service | grep godtunnel-
 EOF
