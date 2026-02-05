@@ -1,28 +1,21 @@
 #!/bin/bash
-# Godtunnel Installer v1.0
-# TCP/IP Tunnel Manager with Interactive Panel
+# Godtunnel Installer (based on VortexL2)
+# Only branding changes: name, Telegram, GitHub
 
-YELLOW='\033[1;33m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-INSTALL_DIR="/opt/godtunnel"
-CONFIG_DIR="/etc/godtunnel"
-BIN_PATH="/usr/local/bin/godtunnel"
-
-# ===============================
-# Logo
-# ===============================
 clear
 echo -e "${YELLOW}"
 cat << 'EOF'
-   ____       _      _______             _       
-  / ___|  ___| |_   |__   __|__ _  ___ | |_ ___ 
-  \___ \ / _ \ __|     | |/ _ \ |/ _ \| __/ __|
-   ___) |  __/ |_      | |  __/ | (_) | |_\__ \
-  |____/ \___|\__|     |_|\___|_|\___/ \__|___/
+  ____       _      _______             _       
+ / ___|  ___| |_   |__   __|__ _  ___ | |_ ___ 
+ \___ \ / _ \ __|     | |/ _ \ |/ _ \| __/ __|
+  ___) |  __/ |_      | |  __/ | (_) | |_\__ \
+ |____/ \___|\__|     |_|\___|_|\___/ \__|___/
 EOF
 echo -e "${GREEN}Godtunnel Installer${NC}"
 echo -e "${CYAN}TCP/IP Tunnel Manager${NC}\n"
@@ -42,10 +35,14 @@ echo -e "${YELLOW}[1/5] Installing dependencies...${NC}"
 apt-get update -qq
 apt-get install -y socat iproute2 systemd curl >/dev/null
 
+INSTALL_DIR="/opt/godtunnel"
+CONFIG_DIR="/etc/godtunnel"
+BIN_PATH="/usr/local/bin/godtunnel"
+
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR/tunnels"
 
 # ===============================
-# Interactive Panel
+# Interactive Panel (same as VortexL2)
 # ===============================
 echo -e "${CYAN}Select server role:${NC}"
 echo "1️⃣  IRAN Server"
@@ -69,7 +66,7 @@ echo "Ports: $PORTS"
 echo ""
 
 # ===============================
-# Create systemd services for each port
+# Create systemd services for each port (same as VortexL2)
 # ===============================
 for PORT in $(echo $PORTS | tr ',' ' '); do
 SERVICE_NAME="godtunnel-$PORT.service"
@@ -91,7 +88,7 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
 systemctl start "$SERVICE_NAME"
 
-# Dummy listener check
+# Dummy listener if port in use
 ss -tuln | grep -q ":$PORT" || {
   DUMMY_SERVICE="dummy-$PORT.service"
   cat >"$CONFIG_DIR/$DUMMY_SERVICE" <<EOF2
